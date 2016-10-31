@@ -1,0 +1,122 @@
+<launch>
+  <!-- Pepper Robot SLAM -->
+  <!-- rgbdslam + odom-->
+
+  <!-- part1: Choose visualization -->
+  <arg name="rviz" default="false"/>
+  <arg name="rtabmapviz" default="true"/>
+  <arg name="rtabmapviz_cfg"        default="-d $(find rtabmap_ros)/launch/config/rgbd_gui.ini"/>
+  <arg name="rviz_cfg"              default="-d $(find rtabmap_ros)/launch/config/rgbd.rviz"/>
+  <param name="use_sim_time" type="bool" value="true"/>
+
+  <arg name="rtabmap_args"          default="--delete_db_on_start"/>   <!-- delete_db_on_start, udebug -->
+  <arg name="visual_odometry"       default="true"/>                   <!-- Launch rtabmap visual odometry node -->
+  <arg name="odom_topic"            default="/odom"/>                  <!-- Odometry topic used if visual_odometry is false -->
+  <arg name="odom_args"             default="$(arg rtabmap_args)"/>
+  <arg name="launch_prefix"         default=""/>                       <!-- for debugging purpose, it fills launch-prefix tag of the nodes -->
+  <arg name="approx_sync"           default="true"/>                   <!-- if timestamps of the input topics are not synchronized -->
+  
+  <!-- part2: Localization-only mode -->
+  <arg name="localization"          default="false"/>
+
+  <!-- part3: rtabmap group -->
+  <group ns="rtabmap">
+    <!-- SLAM (robot side) -->
+    <!-- args: "delete_db_on_start" and "udebug" -->
+	<!-- part4: RTAB-Map's parameters: do "rosrun rtabmap rtabmap (double-dash)params" to see the list of available parameters. -->
+    <node name="rtabmap" pkg="rtabmap_ros" type="rtabmap" output="screen" args="$(arg rtabmap_args)">
+	  <param name="RGBD/NeighborLinkRefining" type="string" value="false"/> <!-- Do odometry correction with consecutive laser scans -->
+	  <param name="RGBD/ProximityBySpace"     type="string" value="true"/>  <!-- Local loop closure detection (using estimated position) with locations in WM -->
+	  <param name="RGBD/ProximityByTime"      type="string" value="false"/> <!-- Local loop closure detection with locations in STM -->
+
+      <param name="frame_id"           type="string" value="base_link"/>
+	  <param name="wait_for_transform" type="bool"   value="true"/>
+      <param name="wait_for_transform_duration"  type="double"   value="0.2"/>
+	  <param name="subscribe_depth"    type="bool"   value="true"/>
+	  <param name="subscribe_scan"     type="bool"   value="true"/>
+	  <param name="approx_sync"        type="bool"   value="true"/>
+
+      <remap unless="$(arg visual_odometry)" from="odom"  to="$(arg odom_topic)"/>
+	  <remap from="scan"               to="/pepper_robot/laser"/>
+	  <remap from="rgb/image"          to="/pepper_robot/camera/front/image_raw"/>
+  	  <remap from="depth/image"        to="/pepper_robot/camera/depth/image_raw"/>
+  	  <remap from="rgb/camera_info"    to="/pepper_robot/camera/front/camera_info"/>
+  	
+      <param name="rgb/image_transport"   type="string" value="compressed"/>
+      <param name="depth/image_transport" type="string" value="compressedDepth"/>
+	
+	  <param name="Reg/Strategy"              type="string" value="2"/>     <!-- 0=Visual, 1=ICP, 2=Visual+ICP -->
+	  <param name="Vis/InlierDistance"        type="string" value="0.05"/>  <!-- 3D visual words correspondence distance -->
+	  <param name="RGBD/OptimizeFromGraphEnd" type="string" value="true"/>  <!-- Optimize graph from initial node so /map -> /odom transform will be generated -->
+	  <param name="Optimizer/Slam2D"          type="string" value="true"/>
+	  <param name="Reg/Force3DoF"             type="string" value="true"/>
+      <param name="Rtabmap/TimeThr"           type="string" value="700"/>
+      <param name="Mem/RehearsalSimilarity"   type="string" value="0.45"/>
+      <param name="Icp/CorrespondenceRatio"   type="string" value="0.5"/>
+	  
+	  <!-- part5: localization mode -->
+	  <param if="$(arg localization)"      name="Mem/IncrementalMemory" type="string" value="false"/>
+	  <param unless="$(arg localization)"  name="Mem/IncrementalMemory" type="string" value="true"/>
+	  <param name="Mem/InitWMWithAllNodes" type="string" value="$(arg localization)"/>
+   </node>
+    
+    <!-- part6: Visualisation RTAB-Map -->
+    <node if="$(arg rtabmapviz)" pkg="rtabmap_ros" type="rtabmapviz" name="rtabmapviz" args="-d $(find rtabmap_ros)/launch/config/rgbd_gui.ini" output="screen">
+	  <param name="frame_id"           type="string" value="base_link"/>
+	  <param name="wait_for_transform" type="bool" value="true"/>
+	  <param name="subscribe_depth"    type="bool" value="true"/>
+	
+	  <remap from="scan"               to="/pepper_robot/laser"/>
+	  <remap from="rgb/image"          to="/pepper_robot/camera/front/image_raw"/>
+  	  <remap from="depth/image"        to="/pepper_robot/camera/depth/image_raw"/>
+  	  <remap from="rgb/camera_info"    to="/pepper_robot/camera/front/camera_info"/>
+      
+      <param name="rgb/image_transport"   type="string" value="compressed"/>
+      <param name="depth/image_transport" type="string" value="compressedDepth"/>
+      <remap unless="$(arg visual_odometry)" from="odom"  to="$(arg odom_topic)"/>
+
+    </node>
+
+    <!-- part7: visual odom-->
+    <node if="$(arg visual_odometry)" pkg="rtabmap_ros" type="rgbd_odometry" name="rgbd_odometry" output="screen" args="$(arg odom_args)" launch-prefix="$(arg launch_prefix)">
+	  
+      <remap from="rgb/image"          to="/pepper_robot/camera/front/image_raw"/>
+  	  <remap from="depth/image"        to="/pepper_robot/camera/depth/image_raw"/>
+  	  <remap from="rgb/camera_info"    to="/pepper_robot/camera/front/camera_info"/>
+      <param name="frame_id"           type="string" value="base_link"/>
+      <param name="wait_for_transform" type="bool"   value="true"/>
+      <param name="approx_sync"        type="bool"   value="true"/>
+      <param name="config_path"        type="string" value=""/>
+      <param name="queue_size"         type="int"    value="10"/>
+
+      <!-- part8: param tuning for visual odometry -->
+      <!-- Tuning visual odometry parameter is very important, it directly affects how good RTAB-Map generally performs -->
+      <param name="Odom/Strategy"    value="0"/>                    <!-- 0=Frame-to-Map (F2M) 1=Frame-to-Frame (F2F) -->
+      <param name="Vis/CorType"      value="0"/>                    <!-- Correspondences: 0=Features Matching, 1=Optical Flow -->
+      <param name="OdomF2M/MaxSize"  type="string" value="2000"/>   <!-- maximum features map size, default 2000 --> 
+      <param name="Vis/MaxFeatures"  type="string" value="1000"/>   <!-- maximum features extracted by image, default 1000 -->
+      <param name="GFTT/MinDistance" type="string" value="5"/>      <!-- default 5 pixels -->
+      <param name="Rtabmap/StartNewMapOnLoopClosure" value="true"/> <!-- keep old map when reset_odom -->
+      <param name="Odom/ResetCountdown"              value="1" />   <!-- reset_odom automatically -->
+      <param name="Vis/MinInliers"   type="int"      value="20"/>   <!-- Minimum feature correspondences to compute/accept the transformation -->
+      <param name="Vis/FeatureType"  type="int"      value="8"/>    <!-- [0=SURF 1=SIFT 2=ORB 3=FAST/FREAK 4=FAST/BRIEF 5=GFTT/FREAK 6=GFTT/BRIEF 7=BRISK 8=GFTT/ORB.] -->
+      
+    </node>
+
+  </group>
+  
+  <!-- part8: Visualisation RVIZ -->
+  <node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz" args="-d /home/lixihua/catkin_ws/src/pepper_robot/pepper_description/config/urdf.rviz" output="screen"/>
+    <node pkg="nodelet" type="nodelet" name="points_xyzrgb" args="standalone rtabmap_ros/point_cloud_xyzrgb">
+	<remap from="rgb/image"             to="/pepper_robot/camera/front/image_raw"/>
+  	<remap from="depth/image"           to="/pepper_robot/camera/depth/image_raw"/>
+  	<remap from="rgb/camera_info"       to="/pepper_robot/camera/front/camera_info"/>
+    <remap from="cloud"                 to="voxel_cloud" />
+    <param name="rgb/image_transport"   type="string" value="compressed"/>
+    <param name="depth/image_transport" type="string" value="compressedDepth"/>
+    
+    <param name="queue_size" type="int" value="10"/>
+    <param name="voxel_size" type="double" value="0.01"/>
+  </node>
+
+</launch>

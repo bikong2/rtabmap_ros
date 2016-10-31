@@ -63,7 +63,6 @@
    
   <arg name="visual_odometry"         default="true"/>          <!-- Launch rtabmap visual odometry node -->
   <arg name="odom_topic"              default="/odom"/>         <!-- Odometry topic used if visual_odometry is false -->
-  <arg name="odom_frame_id"           default=""/>              <!-- If set, TF is used to get odometry instead of the topic -->
   <arg name="odom_args"               default="$(arg rtabmap_args)"/>
   
   <!-- These arguments should not be modified directly, see referred topics without "_relay" suffix above -->
@@ -94,6 +93,14 @@
         <param name="approx_sync"                 type="bool"   value="$(arg approx_sync)"/>
         <param name="config_path"                 type="string" value="$(arg cfg)"/>
         <param name="queue_size"                  type="int" value="$(arg queue_size)"/>
+        
+        <!-- params tuning by lixihua! -->
+        <param name="Odom/ResetCountdown"              value="1" />   <!-- reset_odom automatically -->
+        <param name="Rtabmap/StartNewMapOnLoopClosure" value="true"/> <!-- keep old map when reset_odom -->
+        <param name="Odom/Strategy"                    value="0"/>    <!-- 0=Frame-to-Map (F2M) 1=Frame-to-Frame (F2F) -->
+        <param name="Vis/CorType"                      value="0"/>    <!-- Correspondences: 0=Features Matching, 1=Optical Flow -->
+        <param name="Reg/Force3DoF"               value="true" />     <!-- force the visual odometry to track the vehicle in only 3DOF (x,y,theta) -->
+
       </node>
     </group>
     
@@ -125,12 +132,18 @@
       <param name="subscribe_scan"       type="bool"   value="$(arg subscribe_scan)"/>
       <param name="subscribe_scan_cloud" type="bool"   value="$(arg subscribe_scan_cloud)"/>
       <param name="frame_id"             type="string" value="$(arg frame_id)"/>
-      <param name="odom_frame_id"        type="string" value="$(arg odom_frame_id)"/>
       <param name="wait_for_transform_duration"  type="double"   value="$(arg wait_for_transform)"/>
       <param name="database_path"        type="string" value="$(arg database_path)"/>
       <param name="approx_sync"          type="bool"   value="$(arg approx_sync)"/>
       <param name="config_path"          type="string" value="$(arg cfg)"/>
       <param name="queue_size"           type="int" value="$(arg queue_size)"/>
+
+      <!-- param tuning by lixihua -->
+      <param name="Reg/Force3DoF"    value="true" />
+      <param name="Optimizer/Slam2D" value="true" />
+      <param name="Grid/NoiseFilteringRadius"       value="0.05"/>
+      <param name="Grid/NoiseFilteringMinNeighbors" value="2"/>
+
       
       <remap from="rgb/image"       to="$(arg rgb_topic_relay)"/>
       <remap from="depth/image"     to="$(arg depth_topic_relay)"/>
@@ -160,7 +173,6 @@
       <param name="subscribe_scan_cloud" type="bool"   value="$(arg subscribe_scan_cloud)"/>
       <param name="subscribe_odom_info"  type="bool"   value="$(arg visual_odometry)"/>
       <param name="frame_id"             type="string" value="$(arg frame_id)"/>
-      <param name="odom_frame_id"        type="string" value="$(arg odom_frame_id)"/>
       <param name="wait_for_transform_duration" type="double"   value="$(arg wait_for_transform)"/>
       <param name="queue_size"           type="int" value="$(arg queue_size)"/>
     
